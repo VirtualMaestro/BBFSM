@@ -13,7 +13,7 @@ package bb_fsm
 	final public class BBFSM
 	{
 		private var _agent:Object;
-		private var _stack:Stack;
+		private var _stack:BBStack;
 
 		private var _currentState:BBState;
 		private var _currentTransition:BBTransition;
@@ -43,7 +43,7 @@ package bb_fsm
 			if (p_isStack)
 			{
 				_isStack = true;
-				_stack = new Stack();
+				_stack = new BBStack();
 				_stack.push(_currentState);
 			}
 
@@ -182,7 +182,7 @@ package bb_fsm
 				_currentState.exit();
 				_currentState.dispose();
 				_stack.pop();
-				_currentState = _stack.top;
+				_currentState = _stack.top as BBState;
 				_currentState.enter();
 			}
 		}
@@ -339,8 +339,6 @@ package bb_fsm
 	}
 }
 
-import bb_fsm.BBState;
-
 /**
  */
 internal class Pool
@@ -402,72 +400,3 @@ internal class Pool
 	}
 }
 
-/**
- * Data structure stack used for holding instances of BBState class.
- */
-internal class Stack
-{
-	//
-	private var _stack:Vector.<BBState>;
-	private var _size:int = 0;
-
-	/**
-	 */
-	public function Stack()
-	{
-		_stack = new <BBState>[];
-	}
-
-	/**
-	 */
-	[Inline]
-	final public function push(p_element:BBState):void
-	{
-		_stack[_size++] = p_element;
-	}
-
-	/**
-	 * Removes top element from stack.
-	 */
-	[Inline]
-	final public function pop():void
-	{
-		if (_size > 0) _stack[--_size] = null;
-	}
-
-	/**
-	 * Gets top element. Doesn't removed it from stack.
-	 */
-	[Inline]
-	final public function get top():BBState
-	{
-		return _size > 0 ? _stack[_size - 1] : null;
-	}
-
-	/**
-	 * Number elements in stack.
-	 */
-	[Inline]
-	final public function get size():int
-	{
-		return _size;
-	}
-
-	/**
-	 * Disposes the stack.
-	 */
-	final public function dispose():void
-	{
-		if (_size > 0)
-		{
-			for (var i:int = 0; i < _size; i++)
-			{
-				_stack[i] = null;
-			}
-
-			_stack.length = 0;
-			_stack = null;
-			_size = 0;
-		}
-	}
-}
