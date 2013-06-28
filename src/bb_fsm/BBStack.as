@@ -24,7 +24,7 @@ package bb_fsm
 		/**
 		 */
 		[Inline]
-		final public function push(p_element:BBState):void
+		final public function push(p_element:BBIFSMEntity):void
 		{
 			_stack[_size++] = p_element;
 		}
