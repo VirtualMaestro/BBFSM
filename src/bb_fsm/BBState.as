@@ -17,6 +17,7 @@ package bb_fsm
 		internal var i_fsm:BBFSM;
 
 		private var _classRef:Class;
+		private var _id:int = 0;
 
 		protected var shared:Boolean = false;
 
@@ -24,6 +25,7 @@ package bb_fsm
 		 */
 		public function BBState()
 		{
+			_id = BBUniqueId.getId();
 		}
 
 		/**
@@ -59,6 +61,13 @@ package bb_fsm
 		protected function get agent():Object
 		{
 			return i_agent;
+		}
+
+		/**
+		 */
+		public function get id():int
+		{
+			return _id;
 		}
 
 		/**

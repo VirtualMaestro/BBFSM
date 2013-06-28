@@ -17,5 +17,6 @@ package bb_fsm
 		function get fsm():BBFSM;
 		function getClass():Class;
 		function get isShared():Boolean;
+		function get id():int;
 	}
 }

@@ -22,6 +22,7 @@ package bb_fsm
 		private var _stateFrom:BBState;
 		private var _stateTo:BBState;
 		private var _classRef:Class;
+		private var _id:int = 0;
 
 		protected var shared:Boolean = false;
 
@@ -38,6 +39,8 @@ package bb_fsm
 				BBAssert.isTrue((i_stateFromClass != null), "stateFromClass can't be null", "constructor BBTransition");
 				BBAssert.isTrue((i_stateToClass != null), "stateToClass can't be null", "constructor BBTransition");
 			}
+
+			_id = BBUniqueId.getId();
 		}
 
 		/**
@@ -101,6 +104,13 @@ package bb_fsm
 		{
 			if (_stateTo) _stateTo.dispose();
 			dispose();
+		}
+
+		/**
+		 */
+		public function get id():int
+		{
+			return _id;
 		}
 
 		/**

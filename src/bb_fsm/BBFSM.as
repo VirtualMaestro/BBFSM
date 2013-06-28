@@ -19,6 +19,7 @@ package bb_fsm
 		private var _currentTransition:BBTransition;
 
 		private var _isStack:Boolean = false;
+		private var _id:int = 0;
 
 		/**
 		 */
@@ -28,6 +29,8 @@ package bb_fsm
 			{
 				BBAssert.isTrue(p_agent != null, "parameter 'agent' can't be null", "constructor BBFSM");
 			}
+
+			_id = BBUniqueId.getId();
 
 			initFSM(p_agent, p_initState, p_isStack);
 		}
@@ -212,6 +215,13 @@ package bb_fsm
 			transition.i_fsm = this;
 
 			return transition;
+		}
+
+		/**
+		 */
+		public function get id():int
+		{
+			return _id;
 		}
 
 		/**
