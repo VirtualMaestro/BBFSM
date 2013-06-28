@@ -53,7 +53,6 @@ package bb_fsm
 		public function enter():void
 		{
 			// Need to override in children
-//			exit();
 		}
 
 		/**

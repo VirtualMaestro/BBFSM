@@ -13,36 +13,40 @@ package bb_fsm
 	final public class BBFSM
 	{
 		private var _agent:Object;
-		private var _stack:Object;
+		private var _stack:Stack;
 
 		private var _currentState:BBState;
 		private var _currentTransition:BBTransition;
 
-		//
-		private var _isKeepInstances:Boolean = false;
 		private var _isStack:Boolean = false;
-		private var _isShared:Boolean = false;
 
 		/**
 		 */
-		public function BBFSM(p_agent:Object, p_initState:Class)
+		public function BBFSM(p_agent:Object, p_initState:Class, p_isStack:Boolean = false)
 		{
 			CONFIG::debug
 			{
 				BBAssert.isTrue(p_agent != null, "parameter 'agent' can't be null", "constructor BBFSM");
 			}
 
-			initFSM(p_agent, p_initState);
+			initFSM(p_agent, p_initState, p_isStack);
 		}
 
 		/**
 		 */
 		[Inline]
-		private function initFSM(p_agent:Object, p_initState:Class):void
+		private function initFSM(p_agent:Object, p_initState:Class, p_isStack:Boolean = false):void
 		{
 			_agent = p_agent;
-			_currentState = new p_initState();
-			initState(_currentState);
+			_currentState = getState(p_initState);
+
+			if (p_isStack)
+			{
+				_isStack = true;
+				_stack = new Stack();
+				_stack.push(_currentState);
+			}
+
 			_currentState.enter();
 		}
 
@@ -62,8 +66,13 @@ package bb_fsm
 
 			//
 			var newState:BBState = getState(p_stateClass);
-			initState(newState);
-			switchStates(newState);
+
+			if (_isStack)
+			{
+				_stack.push(_currentState);
+				switchStates(newState);
+			}
+			else switchStates(newState).dispose();
 		}
 
 		/**
@@ -76,14 +85,18 @@ package bb_fsm
 		}
 
 		/**
+		 * Switched states - old state makes exit, new state enter.
+		 * Returns previous state.
 		 */
 		[Inline]
-		private function switchStates(p_state:BBState):void
+		private function switchStates(p_newState:BBState):BBState
 		{
+			var prevState:BBState = _currentState;
 			_currentState.exit();
-			_currentState.dispose();
-			_currentState = p_state;
+			_currentState = p_newState;
 			_currentState.enter();
+
+			return prevState;
 		}
 
 		/**
@@ -114,7 +127,6 @@ package bb_fsm
 			initState(nextState);
 			transition.setStates(_currentState, nextState);
 			transition.i_onCompleteCallback = transitionCompleteCallback;
-			transition.i_fsm = this;
 			_currentTransition = transition;
 			_currentTransition.enter();
 		}
@@ -123,7 +135,8 @@ package bb_fsm
 		 */
 		private function transitionCompleteCallback():void
 		{
-			switchStates(_currentTransition.stateTo);
+			var prevState:BBState = switchStates(_currentTransition.stateTo);
+			if (!_isStack) prevState.dispose();
 			_currentTransition.dispose();
 			_currentTransition = null;
 		}
@@ -150,21 +163,35 @@ package bb_fsm
 		 */
 		public function push(p_stateClass:Class):void
 		{
-
+			changeState(p_stateClass);
 		}
 
 		/**
 		 * Removes state on top of stack.
+		 * Stack should contains at least one state, so you can't remove last state.
 		 */
 		public function pop():void
 		{
+			CONFIG::debug
+			{
+				BBAssert.isTrue(_isStack, "you can't use this pop method if state machine isn't marked as stack", "BBFSM.pop");
+			}
 
+			if (_stack.size > 1)
+			{
+				_currentState.exit();
+				_currentState.dispose();
+				_stack.pop();
+				_currentState = _stack.top;
+				_currentState.enter();
+			}
 		}
 
 		/**
 		 * FSM entity like state and transition adds to appropriate pool.
 		 */
-		internal function addEntityToPool(p_entity:BBIFSMEntity):void
+		[Inline]
+		final internal function addEntityToPool(p_entity:BBIFSMEntity):void
 		{
 			putEntity(p_entity);
 		}
@@ -172,13 +199,19 @@ package bb_fsm
 		[Inline]
 		private function getState(p_stateClass:Class):BBState
 		{
-			return getEntity(p_stateClass) as BBState;
+			var state:BBState = getEntity(p_stateClass) as BBState;
+			initState(state);
+
+			return state;
 		}
 
 		[Inline]
 		private function getTransition(p_transitionClass:Class):BBTransition
 		{
-			return getEntity(p_transitionClass) as BBTransition;
+			var transition:BBTransition = getEntity(p_transitionClass) as BBTransition;
+			transition.i_fsm = this;
+
+			return transition;
 		}
 
 		/**
@@ -190,6 +223,13 @@ package bb_fsm
 			_currentState = null;
 			if (_currentTransition) _currentTransition.interrupt();
 			_currentTransition = null;
+
+			if (_isStack)
+			{
+				_stack.dispose();
+				_stack = null;
+				_isStack = false;
+			}
 
 			// adds to pool
 			put(this);
@@ -205,12 +245,12 @@ package bb_fsm
 		/**
 		 * Returns instance of FSM from pool.
 		 */
-		static public function get(p_agent:Object, p_initState:Class):BBFSM
+		static public function get(p_agent:Object, p_initState:Class, p_isStack:Boolean = false):BBFSM
 		{
 			var fsm:BBFSM = _pool.get() as BBFSM;
 
-			if (fsm) fsm.initFSM(p_agent, p_initState);
-			else fsm = new BBFSM(p_agent, p_initState);
+			if (fsm) fsm.initFSM(p_agent, p_initState, p_isStack);
+			else fsm = new BBFSM(p_agent, p_initState, p_isStack);
 
 			return fsm;
 		}
@@ -299,6 +339,8 @@ package bb_fsm
 	}
 }
 
+import bb_fsm.BBState;
+
 /**
  */
 internal class Pool
@@ -356,6 +398,76 @@ internal class Pool
 			_pool.length = 0;
 			_pool = null;
 			_numInPool = 0;
+		}
+	}
+}
+
+/**
+ * Data structure stack used for holding instances of BBState class.
+ */
+internal class Stack
+{
+	//
+	private var _stack:Vector.<BBState>;
+	private var _size:int = 0;
+
+	/**
+	 */
+	public function Stack()
+	{
+		_stack = new <BBState>[];
+	}
+
+	/**
+	 */
+	[Inline]
+	final public function push(p_element:BBState):void
+	{
+		_stack[_size++] = p_element;
+	}
+
+	/**
+	 * Removes top element from stack.
+	 */
+	[Inline]
+	final public function pop():void
+	{
+		if (_size > 0) _stack[--_size] = null;
+	}
+
+	/**
+	 * Gets top element. Doesn't removed it from stack.
+	 */
+	[Inline]
+	final public function get top():BBState
+	{
+		return _size > 0 ? _stack[_size - 1] : null;
+	}
+
+	/**
+	 * Number elements in stack.
+	 */
+	[Inline]
+	final public function get size():int
+	{
+		return _size;
+	}
+
+	/**
+	 * Disposes the stack.
+	 */
+	final public function dispose():void
+	{
+		if (_size > 0)
+		{
+			for (var i:int = 0; i < _size; i++)
+			{
+				_stack[i] = null;
+			}
+
+			_stack.length = 0;
+			_stack = null;
+			_size = 0;
 		}
 	}
 }
