@@ -226,23 +226,34 @@ package bb_fsm
 
 		/**
 		 */
+		[Inline]
+		final public function get isDisposed():Boolean
+		{
+			return _agent == null;
+		}
+
+		/**
+		 */
 		public function dispose():void
 		{
-			_agent = null;
-			if (_currentState) _currentState.dispose();
-			_currentState = null;
-			if (_currentTransition) _currentTransition.interrupt();
-			_currentTransition = null;
-
-			if (_isStack)
+			if (!isDisposed)
 			{
-				_stack.dispose();
-				_stack = null;
-				_isStack = false;
-			}
+				_agent = null;
+				if (_currentState) _currentState.dispose();
+				_currentState = null;
+				if (_currentTransition) _currentTransition.interrupt();
+				_currentTransition = null;
 
-			// adds to pool
-			put(this);
+				if (_isStack)
+				{
+					_stack.dispose();
+					_stack = null;
+					_isStack = false;
+				}
+
+				// adds to pool
+				put(this);
+			}
 		}
 
 		////////////////////
