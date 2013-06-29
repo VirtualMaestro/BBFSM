@@ -18,30 +18,33 @@ package bb_fsm
 		private var _currentState:BBState;
 		private var _currentTransition:BBTransition;
 
+		private var _defaultState:Class;
 		private var _isStack:Boolean = false;
 		private var _id:int = 0;
 
 		/**
 		 */
-		public function BBFSM(p_agent:Object, p_initState:Class, p_isStack:Boolean = false)
+		public function BBFSM(p_agent:Object, p_defaultState:Class, p_isStack:Boolean = false)
 		{
 			CONFIG::debug
 			{
 				BBAssert.isTrue(p_agent != null, "parameter 'agent' can't be null", "constructor BBFSM");
+				BBAssert.isTrue(p_defaultState != null, "parameter 'p_defaultState' can't be null", "constructor BBFSM");
 			}
 
 			_id = BBUniqueId.getId();
 
-			initFSM(p_agent, p_initState, p_isStack);
+			initFSM(p_agent, p_defaultState, p_isStack);
 		}
 
 		/**
 		 */
 		[Inline]
-		private function initFSM(p_agent:Object, p_initState:Class, p_isStack:Boolean = false):void
+		private function initFSM(p_agent:Object, p_defaultState:Class, p_isStack:Boolean = false):void
 		{
 			_agent = p_agent;
-			_currentState = getState(p_initState);
+			_defaultState = p_defaultState;
+			_currentState = getState(p_defaultState);
 
 			if (p_isStack)
 			{
@@ -243,6 +246,8 @@ package bb_fsm
 				_currentState = null;
 				if (_currentTransition) _currentTransition.interrupt();
 				_currentTransition = null;
+
+				_defaultState = null;
 
 				if (_isStack)
 				{
