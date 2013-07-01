@@ -6,25 +6,25 @@
 package bb_fsm
 {
 	/**
-	 * Data structure stack used for holding instances of BBState class.
+	 * Data structure stack.
 	 */
 	internal class BBStack
 	{
 		//
-		private var _stack:Vector.<BBIFSMEntity>;
+		private var _stack:Vector.<BBIDisposable>;
 		private var _size:int = 0;
 
 		/**
 		 */
 		public function BBStack()
 		{
-			_stack = new <BBIFSMEntity>[];
+			_stack = new <BBIDisposable>[];
 		}
 
 		/**
 		 */
 		[Inline]
-		final public function push(p_element:BBIFSMEntity):void
+		final public function push(p_element:BBIDisposable):void
 		{
 			_stack[_size++] = p_element;
 		}
@@ -33,16 +33,23 @@ package bb_fsm
 		 * Removes top element from stack.
 		 */
 		[Inline]
-		final public function pop():void
+		final public function pop():BBIDisposable
 		{
-			if (_size > 0) _stack[--_size] = null;
+			if (_size > 0)
+			{
+				var element:BBIDisposable = _stack[--_size];
+				_stack[_size] = null;
+				return element;
+			}
+
+			return null;
 		}
 
 		/**
 		 * Gets top element. Doesn't removed it from stack.
 		 */
 		[Inline]
-		final public function get top():BBIFSMEntity
+		final public function get top():BBIDisposable
 		{
 			return _size > 0 ? _stack[_size - 1] : null;
 		}
@@ -63,8 +70,11 @@ package bb_fsm
 		{
 			if (_size > 0)
 			{
+				var element:BBIDisposable;
 				for (var i:int = 0; i < _size; i++)
 				{
+					element = _stack[i];
+					element.rid();
 					_stack[i] = null;
 				}
 

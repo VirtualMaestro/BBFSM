@@ -5,15 +5,16 @@
  */
 package bb_fsm
 {
-	import flash.utils.getDefinitionByName;
-	import flash.utils.getQualifiedClassName;
+	import bb.signals.BBSignal;
 
 	/**
 	 * Represents of transition between states.
 	 */
-	public class BBTransition implements BBIFSMEntity
+	public class BBTransition extends BBFSMEntity
 	{
-		internal var i_fsm:BBFSM;
+		private var _onBegin:BBSignal;
+		private var _onComplete:BBSignal;
+
 		internal var i_onCompleteCallback:Function;
 
 		internal var i_stateFromClass:Class;
@@ -21,15 +22,13 @@ package bb_fsm
 
 		private var _stateFrom:BBState;
 		private var _stateTo:BBState;
-		private var _classRef:Class;
-		private var _id:int = 0;
-
-		protected var shared:Boolean = false;
 
 		/**
 		 */
 		public function BBTransition(p_stateFromClass:Class, p_stateToClass:Class)
 		{
+			super();
+
 			i_stateFromClass = p_stateFromClass;
 			i_stateToClass = p_stateToClass;
 
@@ -40,7 +39,8 @@ package bb_fsm
 				BBAssert.isTrue((i_stateToClass != null), "stateToClass can't be null", "constructor BBTransition");
 			}
 
-			_id = BBUniqueId.getId();
+			_onBegin = BBSignal.get(this, true);
+			_onComplete = BBSignal.get(this, true);
 		}
 
 		/**
@@ -53,23 +53,9 @@ package bb_fsm
 
 		/**
 		 */
-		public function enter():void
-		{
-			// Need to override in children
-		}
-
-		/**
-		 */
-		public function exit():void
+		override public function exit():void
 		{
 			if (i_onCompleteCallback != null) i_onCompleteCallback();
-		}
-
-		/**
-		 */
-		public function update(p_deltaTime:Number):void
-		{
-			// override in children
 		}
 
 		/**
@@ -87,13 +73,6 @@ package bb_fsm
 		}
 
 		/**
-		 */
-		public function get fsm():BBFSM
-		{
-			return i_fsm;
-		}
-
-		/**
 		 * If during transition was invoked this method there is nest scenario:
 		 * - onCompleteCallback is nullify;
 		 * - transition is disposed;
@@ -107,38 +86,45 @@ package bb_fsm
 		}
 
 		/**
+		 * Signal dispatches when transition begin.
 		 */
-		public function get id():int
+		final public function get onBegin():BBSignal
 		{
-			return _id;
+			return _onBegin;
+		}
+
+		/**
+		 * Signal dispatches when transition complete.
+		 */
+		final public function get onComplete():BBSignal
+		{
+			return _onComplete;
 		}
 
 		/**
 		 */
-		public function dispose():void
+		override public function dispose():void
 		{
-			i_onCompleteCallback = null;
-			i_stateFromClass = null;
-			i_stateToClass = null;
-			_stateFrom = null;
-			_stateTo = null;
-			i_fsm.addEntityToPool(this);
-			i_fsm = null;
+			if (!isDisposed)
+			{
+				i_onCompleteCallback = null;
+				i_stateFromClass = null;
+				i_stateToClass = null;
+				_stateFrom = null;
+				_stateTo = null;
+
+				super.dispose();
+			}
 		}
 
 		/**
 		 */
-		final public function getClass():Class
+		override public function rid():void
 		{
-			if (_classRef == null) _classRef = getDefinitionByName(getQualifiedClassName(this)) as Class;
-			return _classRef;
-		}
-
-		/**
-		 */
-		final public function get isShared():Boolean
-		{
-			return shared;
+			if (_onBegin) _onBegin.dispose();
+			_onBegin = null;
+			if (_onComplete) _onComplete.dispose();
+			_onComplete = null;
 		}
 	}
 }

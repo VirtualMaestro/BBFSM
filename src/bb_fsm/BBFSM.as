@@ -5,22 +5,33 @@
  */
 package bb_fsm
 {
+	import bb.signals.BBSignal;
+
 	import flash.utils.Dictionary;
 
 	/**
 	 * Class of finite state machine.
 	 */
-	final public class BBFSM
+	final public class BBFSM implements BBIDisposable
 	{
+		// Dispatches when state was created but not switched or makes enter phase
+		private var _onStateCreated:BBSignal;
+
+		// Dispatches when transition was created but not started and makes enter phase
+		private var _onTransitionCreated:BBSignal;
+
 		private var _agent:Object;
 		private var _stack:BBStack;
 
 		private var _currentState:BBState;
 		private var _currentTransition:BBTransition;
+		private var _sequenceTransitions:BBSequenceTransitions;
 
 		private var _defaultState:Class;
 		private var _isStack:Boolean = false;
 		private var _id:int = 0;
+
+		private var _isTransitioning:Boolean = false;
 
 		/**
 		 */
@@ -60,15 +71,7 @@ package bb_fsm
 		 */
 		public function changeState(p_stateClass:Class, p_force:Boolean = false):void
 		{
-			if (isTransitioning)
-			{
-				if (p_force)
-				{
-					_currentTransition.interrupt();
-					_currentTransition = null;
-				}
-				else return;
-			}
+			if (!interruptTransitions(p_force)) return;
 
 			//
 			var newState:BBState = getState(p_stateClass);
@@ -78,16 +81,16 @@ package bb_fsm
 				_stack.push(_currentState);
 				switchStates(newState);
 			}
-			else switchStates(newState).dispose();
+			else switchStates(newState, true);
 		}
 
 		/**
 		 */
 		[Inline]
-		private function initState(p_state:BBState):void
+		private function initEntity(p_entity:BBFSMEntity):void
 		{
-			p_state.i_agent = _agent;
-			p_state.i_fsm = this;
+			p_entity.i_agent = _agent;
+			p_entity.i_fsm = this;
 		}
 
 		/**
@@ -95,32 +98,50 @@ package bb_fsm
 		 * Returns previous state.
 		 */
 		[Inline]
-		private function switchStates(p_newState:BBState):BBState
+		private function switchStates(p_newState:BBState, p_disposePreviousState:Boolean = false):void
 		{
+			if (_onStateCreated) _onStateCreated.dispatch(p_newState);
+
 			var prevState:BBState = _currentState;
 			_currentState.exit();
 			_currentState = p_newState;
 			_currentState.enter();
 
-			return prevState;
+			if (p_disposePreviousState) prevState.dispose();
+		}
+
+		/**
+		 * Try to interrupt transitions if they are exist.
+		 * Returns 'true' if was interrupted (doesn't matter if  transitions really interrupted or they just absent),
+		 * and 'false' if transitions can't be interrupted.
+		 */
+		[Inline]
+		private function interruptTransitions(p_forceInterrupt:Boolean = false):Boolean
+		{
+			var isInterrupted:Boolean = true;
+
+			if (isTransitioning)
+			{
+				if (!p_forceInterrupt) isInterrupted = false;
+				else
+				{
+					_currentTransition.interrupt();
+					_isTransitioning = false;
+				}
+			}
+
+			return isInterrupted;
 		}
 
 		/**
 		 */
 		public function doTransition(p_transitionClass:Class, p_force:Boolean = false):void
 		{
-			if (isTransitioning)
-			{
-				if (p_force)
-				{
-					_currentTransition.interrupt();
-					_currentTransition = null;
-				}
-				else return;
-			}
+			if (!interruptTransitions(p_force)) return;
 
 			//
 			var transition:BBTransition = getTransition(p_transitionClass);
+			if (_onTransitionCreated) _onTransitionCreated.dispatch(transition);
 
 			// stateFrom class is not the same as currentState, so need to change states before transition
 			if (_currentState.getClass() != transition.i_stateFromClass)
@@ -130,10 +151,12 @@ package bb_fsm
 
 			//
 			var nextState:BBState = new transition.i_stateToClass();
-			initState(nextState);
+			initEntity(nextState);
 			transition.setStates(_currentState, nextState);
 			transition.i_onCompleteCallback = transitionCompleteCallback;
 			_currentTransition = transition;
+			_isTransitioning = true;
+			_currentTransition.onBegin.dispatch();
 			_currentTransition.enter();
 		}
 
@@ -141,10 +164,38 @@ package bb_fsm
 		 */
 		private function transitionCompleteCallback():void
 		{
-			var prevState:BBState = switchStates(_currentTransition.stateTo);
-			if (!_isStack) prevState.dispose();
+			switchStates(_currentTransition.stateTo, !_isStack);
+
+			_isTransitioning = false;
+			_currentTransition.onComplete.dispatch();
 			_currentTransition.dispose();
 			_currentTransition = null;
+		}
+
+		/**
+		 */
+		public function doSequenceTransitions(p_sequenceTransitions:Class, p_force:Boolean = false):void
+		{
+			if (!interruptTransitions(p_force)) return;
+
+			_sequenceTransitions = getSequenceTransitions(p_sequenceTransitions);
+			_sequenceTransitions.onComplete.add(sequenceTransitionsComplete);
+			_sequenceTransitions.enter();
+		}
+
+		/**
+		 */
+		[Inline]
+		private function sequenceTransitionsComplete(p_signal:BBSignal):void
+		{
+			_sequenceTransitions = null;
+		}
+
+		/**
+		 */
+		public function skipSequenceTransitions():void
+		{
+			if (_sequenceTransitions) _sequenceTransitions.skip();
 		}
 
 		/**
@@ -153,7 +204,7 @@ package bb_fsm
 		[Inline]
 		final public function get isTransitioning():Boolean
 		{
-			return _currentTransition != null;
+			return _isTransitioning;
 		}
 
 		/**
@@ -162,6 +213,7 @@ package bb_fsm
 		{
 			_currentState.update(p_deltaTime);
 			if (_currentTransition) _currentTransition.update(p_deltaTime);
+			if (_sequenceTransitions) _sequenceTransitions.update(p_deltaTime);
 		}
 
 		/**
@@ -169,6 +221,11 @@ package bb_fsm
 		 */
 		public function push(p_stateClass:Class):void
 		{
+			CONFIG::debug
+			{
+				BBAssert.isTrue(_isStack, "you can't use 'push' method if state machine isn't marked as stack", "BBFSM.push");
+			}
+
 			changeState(p_stateClass);
 		}
 
@@ -180,17 +237,10 @@ package bb_fsm
 		{
 			CONFIG::debug
 			{
-				BBAssert.isTrue(_isStack, "you can't use this pop method if state machine isn't marked as stack", "BBFSM.pop");
+				BBAssert.isTrue(_isStack, "you can't use 'pop' method if state machine isn't marked as stack", "BBFSM.pop");
 			}
 
-			if (_stack.size > 1)
-			{
-				_currentState.exit();
-				_currentState.dispose();
-				_stack.pop();
-				_currentState = _stack.top as BBState;
-				_currentState.enter();
-			}
+			if (_stack.size > 0) switchStates(_stack.pop() as BBState, true);
 		}
 
 		/**
@@ -206,7 +256,7 @@ package bb_fsm
 		private function getState(p_stateClass:Class):BBState
 		{
 			var state:BBState = getEntity(p_stateClass) as BBState;
-			initState(state);
+			initEntity(state);
 
 			return state;
 		}
@@ -215,9 +265,18 @@ package bb_fsm
 		private function getTransition(p_transitionClass:Class):BBTransition
 		{
 			var transition:BBTransition = getEntity(p_transitionClass) as BBTransition;
-			transition.i_fsm = this;
+			initEntity(transition);
 
 			return transition;
+		}
+
+		[Inline]
+		private function getSequenceTransitions(p_sequenceTransitionClass:Class):BBSequenceTransitions
+		{
+			var sequenceTransition:BBSequenceTransitions = getEntity(p_sequenceTransitionClass) as BBSequenceTransitions;
+			initEntity(sequenceTransition);
+
+			return sequenceTransition;
 		}
 
 		/**
@@ -228,9 +287,28 @@ package bb_fsm
 		}
 
 		/**
+		 * Dispatches when new state was created and ready to switch, but not switched yet or makes enter phase.
+		 * As parameter sends new state.
 		 */
-		[Inline]
-		final public function get isDisposed():Boolean
+		public function get onStateCreated():BBSignal
+		{
+			if (_onStateCreated == null) _onStateCreated = BBSignal.get(this);
+			return _onStateCreated;
+		}
+
+		/**
+		 * Dispatches when new transition was created but not started and makes enter phase.
+		 * As parameter sends new transition.
+		 */
+		public function get onTransitionCreated():BBSignal
+		{
+			if (_onTransitionCreated == null) _onTransitionCreated = BBSignal.get(this);
+			return _onTransitionCreated;
+		}
+
+		/**
+		 */
+		public function get isDisposed():Boolean
 		{
 			return _agent == null;
 		}
@@ -245,6 +323,8 @@ package bb_fsm
 				if (_currentState) _currentState.dispose();
 				_currentState = null;
 				if (_currentTransition) _currentTransition.interrupt();
+				_currentTransition = null;
+				if (_sequenceTransitions) _sequenceTransitions.interrupt();
 				_currentTransition = null;
 
 				_defaultState = null;
@@ -261,19 +341,29 @@ package bb_fsm
 			}
 		}
 
+		/**
+		 */
+		public function rid():void
+		{
+			if (_onStateCreated) _onStateCreated.dispose();
+			_onStateCreated = null;
+			if (_onTransitionCreated) _onTransitionCreated.dispose();
+			_onTransitionCreated = null;
+		}
+
 		////////////////////
 		/// POOL ///////////
 		////////////////////
 
 		//
-		static private var _pool:Pool = new Pool();
+		static private var _pool:BBStack = new BBStack();
 
 		/**
 		 * Returns instance of FSM from pool.
 		 */
 		static public function get(p_agent:Object, p_initState:Class, p_isStack:Boolean = false):BBFSM
 		{
-			var fsm:BBFSM = _pool.get() as BBFSM;
+			var fsm:BBFSM = _pool.pop() as BBFSM;
 
 			if (fsm) fsm.initFSM(p_agent, p_initState, p_isStack);
 			else fsm = new BBFSM(p_agent, p_initState, p_isStack);
@@ -285,15 +375,16 @@ package bb_fsm
 		 */
 		static private function put(p_fsm:BBFSM):void
 		{
-			_pool.put(p_fsm);
+			_pool.push(p_fsm);
 		}
 
 		/**
+		 * Removes all pools with ridding of all elements, but pool itself are not removed.
 		 */
 		static public function rid():void
 		{
 			_pool.dispose();
-			_pool = new Pool();
+			_pool = new BBStack();
 			ridEntityPool();
 		}
 
@@ -310,9 +401,9 @@ package bb_fsm
 		static private function getEntity(p_entityClass:Class):BBIFSMEntity
 		{
 			var entityInstance:BBIFSMEntity;
-			var pool:Pool = _entityPool[p_entityClass];
+			var pool:BBStack = _entityPool[p_entityClass];
 
-			if (pool && pool.numInPool > 0) entityInstance = pool.get() as BBIFSMEntity;
+			if (pool && pool.size > 0) entityInstance = pool.pop() as BBIFSMEntity;
 			else entityInstance = new p_entityClass();
 
 			// is shared take bake entity to pool
@@ -326,16 +417,16 @@ package bb_fsm
 		static private function putEntity(p_entity:BBIFSMEntity):void
 		{
 			var entityClass:Class = p_entity.getClass();
-			var pool:Pool = _entityPool[entityClass];
+			var pool:BBStack = _entityPool[entityClass];
 
 			if (pool == null)
 			{
-				pool = new Pool();
+				pool = new BBStack();
 				_entityPool[entityClass] = pool;
 			}
 
 			//
-			if (!p_entity.isShared || pool.numInPool == 0) pool.put(p_entity);
+			if (!p_entity.isShared || pool.size == 0) pool.push(p_entity);
 		}
 
 		/**
@@ -349,7 +440,7 @@ package bb_fsm
 		 */
 		static private function numEntities(p_entityClass:Class):int
 		{
-			return (_entityPool[p_entityClass] as Pool).numInPool;
+			return (_entityPool[p_entityClass] as BBStack).size;
 		}
 
 		/**
@@ -358,70 +449,9 @@ package bb_fsm
 		{
 			for (var entityClass:Object in _entityPool)
 			{
-				(_entityPool[entityClass] as Pool).dispose();
+				(_entityPool[entityClass] as BBStack).dispose();
 				delete _entityPool[entityClass];
 			}
-		}
-	}
-}
-
-/**
- */
-internal class Pool
-{
-	//
-	private var _pool:Array;
-	private var _numInPool:int = 0;
-
-	/**
-	 */
-	public function Pool()
-	{
-		_pool = [];
-	}
-
-	/**
-	 */
-	public function put(p_obj:Object):void
-	{
-		_pool[_numInPool++] = p_obj;
-	}
-
-	/**
-	 */
-	public function get():Object
-	{
-		var obj:Object;
-		if (_numInPool > 0)
-		{
-			obj = _pool[--_numInPool];
-			_pool[_numInPool] = null;
-		}
-
-		return obj;
-	}
-
-	/**
-	 */
-	public function get numInPool():int
-	{
-		return _numInPool;
-	}
-
-	/**
-	 */
-	public function dispose():void
-	{
-		if (_pool && _numInPool > 0)
-		{
-			for (var i:int = 0; i < _numInPool; i++)
-			{
-				_pool[i] = null;
-			}
-
-			_pool.length = 0;
-			_pool = null;
-			_numInPool = 0;
 		}
 	}
 }

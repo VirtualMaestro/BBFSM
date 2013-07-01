@@ -5,93 +5,14 @@
  */
 package bb_fsm
 {
-	import flash.utils.getDefinitionByName;
-	import flash.utils.getQualifiedClassName;
-
 	/**
 	 * Represents of state for state machine.
 	 */
-	public class BBState implements BBIFSMEntity
+	public class BBState extends BBFSMEntity
 	{
-		internal var i_agent:Object;
-		internal var i_fsm:BBFSM;
-
-		private var _classRef:Class;
-		private var _id:int = 0;
-
-		protected var shared:Boolean = false;
-
-		/**
-		 */
 		public function BBState()
 		{
-			_id = BBUniqueId.getId();
-		}
-
-		/**
-		 */
-		public function enter():void
-		{
-
-		}
-
-		/**
-		 */
-		public function exit():void
-		{
-
-		}
-
-		/**
-		 */
-		public function update(p_deltaTime:Number):void
-		{
-
-		}
-
-		/**
-		 */
-		public function get fsm():BBFSM
-		{
-			return i_fsm;
-		}
-
-		/**
-		 */
-		protected function get agent():Object
-		{
-			return i_agent;
-		}
-
-		/**
-		 */
-		public function get id():int
-		{
-			return _id;
-		}
-
-		/**
-		 */
-		public function dispose():void
-		{
-			i_agent = null;
-			i_fsm.addEntityToPool(this);
-			i_fsm = null;
-		}
-
-		/**
-		 */
-		final public function getClass():Class
-		{
-			if (_classRef == null) _classRef = getDefinitionByName(getQualifiedClassName(this)) as Class;
-			return _classRef;
-		}
-
-		/**
-		 */
-		final public function get isShared():Boolean
-		{
-			return shared;
+			super();
 		}
 	}
 }
