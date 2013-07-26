@@ -105,12 +105,10 @@ package bb_fsm
 		{
 			if (_onStateCreated) _onStateCreated.dispatch(p_newState);
 
-			var prevState:BBState = _currentState;
 			_currentState.exit();
+			if (p_disposePreviousState) _currentState.dispose();
 			_currentState = p_newState;
 			_currentState.enter();
-
-			if (p_disposePreviousState) prevState.dispose();
 		}
 
 		/**
