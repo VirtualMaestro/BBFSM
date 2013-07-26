@@ -68,6 +68,9 @@ package bb_fsm
 		}
 
 		/**
+		 * Changes to given state.
+		 * p_force - forcing change. It needs when performs transition and at the same time need to change state.
+		 * If p_force is 'false' changing states can't be performed. p_force should be 'true' for interrupts current transition and performs changing states.
 		 */
 		public function changeState(p_stateClass:Class, p_force:Boolean = false):void
 		{
