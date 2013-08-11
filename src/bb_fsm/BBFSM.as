@@ -212,9 +212,9 @@ package bb_fsm
 		 */
 		public function update(p_deltaTime:Number):void
 		{
-			_currentState.update(p_deltaTime);
-			if (_currentTransition) _currentTransition.update(p_deltaTime);
-			if (_sequenceTransitions) _sequenceTransitions.update(p_deltaTime);
+			if (_currentState.updateEnable) _currentState.update(p_deltaTime);
+			if (_currentTransition && _currentTransition.updateEnable) _currentTransition.update(p_deltaTime);
+			if (_sequenceTransitions && _sequenceTransitions.updateEnable) _sequenceTransitions.update(p_deltaTime);
 		}
 
 		/**

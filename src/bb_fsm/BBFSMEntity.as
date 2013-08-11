@@ -22,6 +22,11 @@ package bb_fsm
 		protected var shared:Boolean = false;
 
 		/**
+		 * Enable/disable invoke of 'update' method. By default 'false'
+		 */
+		public var updateEnable:Boolean = false;
+
+		/**
 		 */
 		public function BBFSMEntity()
 		{
