@@ -11,12 +11,19 @@ package bb_fsm
 	internal interface BBIFSMEntity extends BBIDisposable
 	{
 		function enter():void;
+
 		function exit():void;
-		function update(p_deltaTime:Number):void;
+
+		function update(p_deltaTime:int):void;
+
 		function get fsm():BBFSM;
+
 		function get agent():Object;
+
 		function getClass():Class;
+
 		function get isShared():Boolean;
+
 		function get id():int;
 	}
 }

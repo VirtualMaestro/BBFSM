@@ -47,7 +47,7 @@ package bb_fsm
 
 		/**
 		 */
-		public function update(p_deltaTime:Number):void
+		public function update(p_deltaTime:int):void
 		{
 		}
 

@@ -86,7 +86,7 @@ package bb_fsm
 		public function skip():void
 		{
 			var numTransitions:int = _stack.size;
-			for (var i:int = numTransitions-1; i > 1; i--)
+			for (var i:int = numTransitions - 1; i > 1; i--)
 			{
 				next().dispose();
 			}
@@ -105,7 +105,7 @@ package bb_fsm
 
 		/**
 		 */
-		override public function update(p_deltaTime:Number):void
+		override public function update(p_deltaTime:int):void
 		{
 			if (_transitionComplete)
 			{
@@ -140,7 +140,7 @@ package bb_fsm
 			var numTransitions:int = _stack.size;
 			if (numTransitions > 0)
 			{
-				for (var i:int = numTransitions-1; i >= 0; i--)
+				for (var i:int = numTransitions - 1; i >= 0; i--)
 				{
 					next().dispose();
 				}

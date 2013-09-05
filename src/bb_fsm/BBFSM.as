@@ -210,7 +210,7 @@ package bb_fsm
 
 		/**
 		 */
-		public function update(p_deltaTime:Number):void
+		public function update(p_deltaTime:int):void
 		{
 			if (_currentState.updateEnable) _currentState.update(p_deltaTime);
 			if (_currentTransition && _currentTransition.updateEnable) _currentTransition.update(p_deltaTime);
