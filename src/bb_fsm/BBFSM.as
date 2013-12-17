@@ -34,6 +34,12 @@ package bb_fsm
 		private var _isTransitioning:Boolean = false;
 
 		/**
+		 * If 'true' mean instance fully destroying, without adding to pool.
+		 * Only when invoke 'rid' method.
+		 */
+		private var _rid:Boolean = false;
+
+		/**
 		 */
 		public function BBFSM(p_agent:Object, p_defaultState:Class, p_isStack:Boolean = false)
 		{
@@ -50,7 +56,6 @@ package bb_fsm
 
 		/**
 		 */
-		[Inline]
 		private function initFSM(p_agent:Object, p_defaultState:Class, p_isStack:Boolean = false):void
 		{
 			_agent = p_agent;
@@ -135,6 +140,9 @@ package bb_fsm
 		}
 
 		/**
+		 * Starts performing transition of given transition's class.
+		 * p_force - 'false' mean transition won't start if some other transition is performed.
+		 *           'true' mean if some other transition is performed it is interrupted and starts perform given transition.
 		 */
 		public function doTransition(p_transitionClass:Class, p_force:Boolean = false):void
 		{
@@ -151,10 +159,12 @@ package bb_fsm
 			}
 
 			//
-			var nextState:BBState = new transition.i_stateToClass();
+			var nextState:BBState = getState(transition.i_stateToClass);
 			initEntity(nextState);
+
 			transition.setStates(_currentState, nextState);
 			transition.i_onCompleteCallback = transitionCompleteCallback;
+
 			_currentTransition = transition;
 			_isTransitioning = true;
 			_currentTransition.onBegin.dispatch();
@@ -174,6 +184,8 @@ package bb_fsm
 		}
 
 		/**
+		 * Starts to perform sequence transitions by given class.
+		 * p_force - if 'true' any current performed transitions or sequence transitions is interrupted.
 		 */
 		public function doSequenceTransitions(p_sequenceTransitions:Class, p_force:Boolean = false):void
 		{
@@ -193,6 +205,7 @@ package bb_fsm
 		}
 
 		/**
+		 * If need skip current performed sequence transitions.
 		 */
 		public function skipSequenceTransitions():void
 		{
@@ -209,6 +222,8 @@ package bb_fsm
 		}
 
 		/**
+		 * If need permanent update in states of transitions.
+		 * Method can be invoked every tick (enter frame) with set of delta time between invocations.
 		 */
 		public function update(p_deltaTime:int):void
 		{
@@ -253,6 +268,9 @@ package bb_fsm
 			putEntity(p_entity);
 		}
 
+		/**
+		 * Gets instance from the pool of state by given class.
+		 */
 		[Inline]
 		private function getState(p_stateClass:Class):BBState
 		{
@@ -262,6 +280,9 @@ package bb_fsm
 			return state;
 		}
 
+		/**
+		 * Gets instance from the pool of transition by given class.
+		 */
 		[Inline]
 		private function getTransition(p_transitionClass:Class):BBTransition
 		{
@@ -271,6 +292,9 @@ package bb_fsm
 			return transition;
 		}
 
+		/**
+		 * Gets instance from the pool of sequence transitions by given class.
+		 */
 		[Inline]
 		private function getSequenceTransitions(p_sequenceTransitionClass:Class):BBSequenceTransitions
 		{
@@ -281,6 +305,7 @@ package bb_fsm
 		}
 
 		/**
+		 * Returns unique number of current instance.
 		 */
 		public function get id():int
 		{
@@ -308,23 +333,30 @@ package bb_fsm
 		}
 
 		/**
+		 * Determines if current instance already disposed.
 		 */
-		public function get isDisposed():Boolean
+		[Inline]
+		final public function get isDisposed():Boolean
 		{
 			return _agent == null;
 		}
 
 		/**
+		 * Method removes instance with possibility of re-use it again.
+		 * Instance put to pool and use next time.
 		 */
 		public function dispose():void
 		{
 			if (!isDisposed)
 			{
 				_agent = null;
+
 				if (_currentState) _currentState.dispose();
 				_currentState = null;
+
 				if (_currentTransition) _currentTransition.interrupt();
 				_currentTransition = null;
+
 				if (_sequenceTransitions) _sequenceTransitions.interrupt();
 				_currentTransition = null;
 
@@ -338,16 +370,22 @@ package bb_fsm
 				}
 
 				// adds to pool
-				put(this);
+				if (!_rid) put(this);
 			}
 		}
 
 		/**
+		 * Completely removes instance without any chance to use it again.
 		 */
 		public function rid():void
 		{
+			_rid = true;
+
+			dispose();
+
 			if (_onStateCreated) _onStateCreated.dispose();
 			_onStateCreated = null;
+
 			if (_onTransitionCreated) _onTransitionCreated.dispose();
 			_onTransitionCreated = null;
 		}
@@ -407,7 +445,7 @@ package bb_fsm
 			if (pool && pool.size > 0) entityInstance = pool.pop() as BBIFSMEntity;
 			else entityInstance = new p_entityClass();
 
-			// is shared take bake entity to pool
+			// is shared take back entity to pool
 			if (entityInstance.isShared) putEntity(entityInstance);
 
 			return entityInstance;

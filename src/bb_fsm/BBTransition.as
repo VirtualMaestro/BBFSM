@@ -102,6 +102,7 @@ package bb_fsm
 		}
 
 		/**
+		 * Removes current instance, but it is possible to re-use it (it is stored in cache).
 		 */
 		override public function dispose():void
 		{
@@ -118,11 +119,16 @@ package bb_fsm
 		}
 
 		/**
+		 * Completely removes current instance without possibility to re-use it.
+		 * If need to override it in children don't forget to invoke super method.
 		 */
 		override public function rid():void
 		{
+			super.rid();
+
 			if (_onBegin) _onBegin.dispose();
 			_onBegin = null;
+
 			if (_onComplete) _onComplete.dispose();
 			_onComplete = null;
 		}

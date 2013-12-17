@@ -18,6 +18,7 @@ package bb_fsm
 
 		private var _classRef:Class;
 		private var _id:int = 0;
+		private var _rid:Boolean = false;
 
 		protected var shared:Boolean = false;
 
@@ -34,24 +35,28 @@ package bb_fsm
 		}
 
 		/**
+		 * When agent goes in to current state/transition.
 		 */
 		public function enter():void
 		{
 		}
 
 		/**
+		 * When agent goes out from current state/transition.
 		 */
 		public function exit():void
 		{
 		}
 
 		/**
+		 * Invokes every tick (enter frame) in case if fsm invokes own 'update' method.
 		 */
 		public function update(p_deltaTime:int):void
 		{
 		}
 
 		/**
+		 * Returns instance of fsm that owns current instance of entity.
 		 */
 		public function get fsm():BBFSM
 		{
@@ -59,6 +64,7 @@ package bb_fsm
 		}
 
 		/**
+		 * Returns agent of current instance.
 		 */
 		public function get agent():Object
 		{
@@ -66,6 +72,7 @@ package bb_fsm
 		}
 
 		/**
+		 * Returns class of current instance.
 		 */
 		public function getClass():Class
 		{
@@ -74,6 +81,10 @@ package bb_fsm
 		}
 
 		/**
+		 * Determines if current instance shared.
+		 * E.g. if possible to use one instance (e.g.) state for several agents.
+		 * By default 'false'.
+		 * There is property 'shared', it is possible to set it in instances/children.
 		 */
 		public function get isShared():Boolean
 		{
@@ -81,6 +92,7 @@ package bb_fsm
 		}
 
 		/**
+		 * Returns unique number of current instance.
 		 */
 		public function get id():int
 		{
@@ -90,28 +102,35 @@ package bb_fsm
 		/**
 		 * Checks if entity disposed.
 		 */
-		public function get isDisposed():Boolean
+		[Inline]
+		final public function get isDisposed():Boolean
 		{
 			return i_agent == null;
 		}
 
 		/**
+		 * Removes current instance, but it is possible to re-use it (it is stored in cache).
 		 */
 		public function dispose():void
 		{
 			if (!isDisposed)
 			{
+				if (!_rid) i_fsm.addEntityToPool(this);
+
 				i_agent = null;
-				i_fsm.addEntityToPool(this);
 				i_fsm = null;
 			}
 		}
 
 		/**
+		 * Completely removes current instance without possibility to re-use it.
+		 * If need to override it in children don't forget to invoke super method.
 		 */
 		public function rid():void
 		{
-			// override in children
+			_rid = true;
+
+			dispose();
 		}
 	}
 }
