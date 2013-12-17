@@ -105,7 +105,6 @@ package bb_fsm
 		 * Switched states - old state makes exit, new state enter.
 		 * Returns previous state.
 		 */
-		[Inline]
 		private function switchStates(p_newState:BBState, p_disposePreviousState:Boolean = false):void
 		{
 			if (_onStateCreated) _onStateCreated.dispatch(p_newState);

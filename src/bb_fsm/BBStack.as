@@ -23,7 +23,6 @@ package bb_fsm
 
 		/**
 		 */
-		[Inline]
 		final public function push(p_element:BBIDisposable):void
 		{
 			_stack[_size++] = p_element;
@@ -32,7 +31,6 @@ package bb_fsm
 		/**
 		 * Removes top element from stack.
 		 */
-		[Inline]
 		final public function pop():BBIDisposable
 		{
 			if (_size > 0)
@@ -48,7 +46,6 @@ package bb_fsm
 		/**
 		 * Gets top element. Doesn't removed it from stack.
 		 */
-		[Inline]
 		final public function get top():BBIDisposable
 		{
 			return _size > 0 ? _stack[_size - 1] : null;
@@ -57,7 +54,6 @@ package bb_fsm
 		/**
 		 * Number elements in stack.
 		 */
-		[Inline]
 		final public function get size():int
 		{
 			return _size;

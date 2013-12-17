@@ -97,7 +97,6 @@ package bb_fsm
 		/**
 		 * Returns next transition in stack.
 		 */
-		[Inline]
 		private function next():BBTransitionItem
 		{
 			return _stack.pop() as BBTransitionItem;
