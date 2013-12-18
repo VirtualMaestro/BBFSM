@@ -18,14 +18,14 @@ package bb_fsm
 		private var _onStateCreated:BBSignal;
 
 		// Dispatches when transition was created but not started and makes enter phase
-		private var _onTransitionCreated:BBSignal;
+		private var _onTransitionReady:BBSignal;
 
 		private var _agent:Object;
 		private var _stack:BBStack;
 
 		private var _currentState:BBState;
 		private var _currentTransition:BBTransition;
-		private var _sequenceTransitions:BBSequenceTransitions;
+		private var _currentSequenceTransitions:BBSequenceTransitions;
 
 		private var _defaultState:Class;
 		private var _isStack:Boolean = false;
@@ -60,7 +60,7 @@ package bb_fsm
 		{
 			_agent = p_agent;
 			_defaultState = p_defaultState;
-			_currentState = getState(p_defaultState);
+			_currentState = getStateByClass(p_defaultState);
 
 			if (p_isStack)
 			{
@@ -82,7 +82,7 @@ package bb_fsm
 			if (!interruptTransitions(p_force)) return;
 
 			//
-			var newState:BBState = getState(p_stateClass);
+			var newState:BBState = getStateByClass(p_stateClass);
 
 			if (_isStack)
 			{
@@ -110,6 +110,7 @@ package bb_fsm
 			if (_onStateCreated) _onStateCreated.dispatch(p_newState);
 
 			_currentState.exit();
+
 			if (p_disposePreviousState) _currentState.dispose();
 			_currentState = p_newState;
 			_currentState.enter();
@@ -131,6 +132,11 @@ package bb_fsm
 				else
 				{
 					_currentTransition.interrupt();
+					_currentTransition = null;
+
+					if (_currentSequenceTransitions) _currentSequenceTransitions.interrupt();
+					_currentSequenceTransitions = null;
+
 					_isTransitioning = false;
 				}
 			}
@@ -142,32 +148,51 @@ package bb_fsm
 		 * Starts performing transition of given transition's class.
 		 * p_force - 'false' mean transition won't start if some other transition is performed.
 		 *           'true' mean if some other transition is performed it is interrupted and starts perform given transition.
+		 * If method returns 'true' mean that transition starts normally; 'false' - transition doesn't start.
 		 */
-		public function doTransition(p_transitionClass:Class, p_force:Boolean = false):void
+		public function doTransition(p_transitionClass:Class, p_force:Boolean = false):Boolean
 		{
-			if (!interruptTransitions(p_force)) return;
+			if (!interruptTransitions(p_force)) return false;
 
 			//
-			var transition:BBTransition = getTransition(p_transitionClass);
-			if (_onTransitionCreated) _onTransitionCreated.dispatch(transition);
+			var transition:BBTransition = getTransitionByClass(p_transitionClass);
+			_currentTransition = transition;
+			_isTransitioning = true;
+
+			var prevStateClass:Class = _currentState.getClass();
 
 			// stateFrom class is not the same as currentState, so need to change states before transition
-			if (_currentState.getClass() != transition.i_stateFromClass)
+			if (prevStateClass != transition.i_stateFromClass)
 			{
 				changeState(transition.i_stateFromClass);
 			}
 
 			//
-			var nextState:BBState = getState(transition.i_stateToClass);
-			initEntity(nextState);
-
-			transition.setStates(_currentState, nextState);
+			transition.setStates(_currentState, getStateByClass(transition.i_stateToClass));
 			transition.i_onCompleteCallback = transitionCompleteCallback;
 
-			_currentTransition = transition;
-			_isTransitioning = true;
-			_currentTransition.onBegin.dispatch();
-			_currentTransition.enter();
+			if (_onTransitionReady) _onTransitionReady.dispatch(transition);
+
+			//
+			if (!transition.isDisposed)
+			{
+				transition.dispatchOnBegin();
+				transition.enter();
+			}
+			else
+			{
+				_currentTransition = null;
+				_isTransitioning = false;
+
+				if (prevStateClass != _currentState.getClass())
+				{
+					changeState(prevStateClass, true);
+				}
+
+				return false;
+			}
+
+			return true;
 		}
 
 		/**
@@ -177,7 +202,7 @@ package bb_fsm
 			switchStates(_currentTransition.stateTo, !_isStack);
 
 			_isTransitioning = false;
-			_currentTransition.onComplete.dispatch();
+			_currentTransition.dispatchOnComplete();
 			_currentTransition.dispose();
 			_currentTransition = null;
 		}
@@ -190,17 +215,17 @@ package bb_fsm
 		{
 			if (!interruptTransitions(p_force)) return;
 
-			_sequenceTransitions = getSequenceTransitions(p_sequenceTransitions);
-			_sequenceTransitions.onComplete.add(sequenceTransitionsComplete);
-			_sequenceTransitions.enter();
+			_currentSequenceTransitions = getSequenceTransitionsByClass(p_sequenceTransitions);
+			_currentSequenceTransitions.i_completeCallback = sequenceTransitionsComplete;
+			_currentSequenceTransitions.enter();
 		}
 
 		/**
 		 */
 		[Inline]
-		private function sequenceTransitionsComplete(p_signal:BBSignal):void
+		private function sequenceTransitionsComplete():void
 		{
-			_sequenceTransitions = null;
+			_currentSequenceTransitions = null;
 		}
 
 		/**
@@ -208,7 +233,7 @@ package bb_fsm
 		 */
 		public function skipSequenceTransitions():void
 		{
-			if (_sequenceTransitions) _sequenceTransitions.skip();
+			if (_currentSequenceTransitions) _currentSequenceTransitions.skipAll();
 		}
 
 		/**
@@ -228,7 +253,7 @@ package bb_fsm
 		{
 			if (_currentState.updateEnable) _currentState.update(p_deltaTime);
 			if (_currentTransition && _currentTransition.updateEnable) _currentTransition.update(p_deltaTime);
-			if (_sequenceTransitions && _sequenceTransitions.updateEnable) _sequenceTransitions.update(p_deltaTime);
+			if (_currentSequenceTransitions && _currentSequenceTransitions.updateEnable) _currentSequenceTransitions.update(p_deltaTime);
 		}
 
 		/**
@@ -271,7 +296,7 @@ package bb_fsm
 		 * Gets instance from the pool of state by given class.
 		 */
 		[Inline]
-		private function getState(p_stateClass:Class):BBState
+		private function getStateByClass(p_stateClass:Class):BBState
 		{
 			var state:BBState = getEntity(p_stateClass) as BBState;
 			initEntity(state);
@@ -283,7 +308,7 @@ package bb_fsm
 		 * Gets instance from the pool of transition by given class.
 		 */
 		[Inline]
-		private function getTransition(p_transitionClass:Class):BBTransition
+		private function getTransitionByClass(p_transitionClass:Class):BBTransition
 		{
 			var transition:BBTransition = getEntity(p_transitionClass) as BBTransition;
 			initEntity(transition);
@@ -295,7 +320,7 @@ package bb_fsm
 		 * Gets instance from the pool of sequence transitions by given class.
 		 */
 		[Inline]
-		private function getSequenceTransitions(p_sequenceTransitionClass:Class):BBSequenceTransitions
+		private function getSequenceTransitionsByClass(p_sequenceTransitionClass:Class):BBSequenceTransitions
 		{
 			var sequenceTransition:BBSequenceTransitions = getEntity(p_sequenceTransitionClass) as BBSequenceTransitions;
 			initEntity(sequenceTransition);
@@ -325,10 +350,37 @@ package bb_fsm
 		 * Dispatches when new transition was created but not started and makes enter phase.
 		 * As parameter sends new transition.
 		 */
-		public function get onTransitionCreated():BBSignal
+		public function get onTransitionReady():BBSignal
 		{
-			if (_onTransitionCreated == null) _onTransitionCreated = BBSignal.get(this);
-			return _onTransitionCreated;
+			if (_onTransitionReady == null) _onTransitionReady = BBSignal.get(this);
+			return _onTransitionReady;
+		}
+
+		/**
+		 * Returns current state instant.
+		 * @return BBState
+		 */
+		public function getState():BBState
+		{
+			return _currentState;
+		}
+
+		/**
+		 * Returns current transition instance in case if it exist. If not return null;
+		 * @return BBTransition
+		 */
+		public function getTransition():BBTransition
+		{
+			return _currentTransition;
+		}
+
+		/**
+		 * Returns current sequence transition instance in case if it exist. If not returns null;
+		 * @return BBSequenceTransitions
+		 */
+		public function getSequenceTransitions():BBSequenceTransitions
+		{
+			return _currentSequenceTransitions;
 		}
 
 		/**
@@ -356,7 +408,7 @@ package bb_fsm
 				if (_currentTransition) _currentTransition.interrupt();
 				_currentTransition = null;
 
-				if (_sequenceTransitions) _sequenceTransitions.interrupt();
+				if (_currentSequenceTransitions) _currentSequenceTransitions.interrupt();
 				_currentTransition = null;
 
 				_defaultState = null;
@@ -385,8 +437,8 @@ package bb_fsm
 			if (_onStateCreated) _onStateCreated.dispose();
 			_onStateCreated = null;
 
-			if (_onTransitionCreated) _onTransitionCreated.dispose();
-			_onTransitionCreated = null;
+			if (_onTransitionReady) _onTransitionReady.dispose();
+			_onTransitionReady = null;
 		}
 
 		////////////////////

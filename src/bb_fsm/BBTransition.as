@@ -38,9 +38,6 @@ package bb_fsm
 				BBAssert.isTrue((i_stateFromClass != null), "stateFromClass can't be null", "constructor BBTransition");
 				BBAssert.isTrue((i_stateToClass != null), "stateToClass can't be null", "constructor BBTransition");
 			}
-
-			_onBegin = BBSignal.get(this, true);
-			_onComplete = BBSignal.get(this, true);
 		}
 
 		/**
@@ -55,7 +52,7 @@ package bb_fsm
 		 */
 		override public function exit():void
 		{
-			if (i_onCompleteCallback != null) i_onCompleteCallback();
+			i_onCompleteCallback();
 		}
 
 		/**
@@ -73,10 +70,10 @@ package bb_fsm
 		}
 
 		/**
-		 * If during transition was invoked this method there is nest scenario:
-		 * - onCompleteCallback is nullify;
+		 * If during transition was invoked this method there is next scenario:
+		 * - onCompleteCallback is nullify (and doesn't dispatched);
 		 * - transition is disposed;
-		 * - stateTo is disposed;
+		 * - stateTo is disposed (and not applied);
 		 * - exit method won't invoke;
 		 */
 		internal function interrupt():void
@@ -90,7 +87,16 @@ package bb_fsm
 		 */
 		final public function get onBegin():BBSignal
 		{
+			if (_onBegin == null) _onBegin = BBSignal.get(this, true);
 			return _onBegin;
+		}
+
+		/**
+		 * Dispatching onBegin signal (if it exist)
+		 */
+		internal function dispatchOnBegin():void
+		{
+			if (_onBegin) _onBegin.dispatch();
 		}
 
 		/**
@@ -98,7 +104,16 @@ package bb_fsm
 		 */
 		final public function get onComplete():BBSignal
 		{
+			if (_onComplete == null) _onComplete = BBSignal.get(this, true);
 			return _onComplete;
+		}
+
+		/**
+		 * Dispatching onComplete signal (if it exist)
+		 */
+		internal function dispatchOnComplete():void
+		{
+			if (_onComplete) _onComplete.dispatch();
 		}
 
 		/**
