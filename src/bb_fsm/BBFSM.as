@@ -148,11 +148,12 @@ package bb_fsm
 		 * Starts performing transition of given transition's class.
 		 * p_force - 'false' mean transition won't start if some other transition is performed.
 		 *           'true' mean if some other transition is performed it is interrupted and starts perform given transition.
-		 * If method returns 'true' mean that transition starts normally; 'false' - transition doesn't start.
+		 * If method returns instance of transition which mean that transition starts normally;
+		 * If method returns null - transition doesn't start.
 		 */
-		public function doTransition(p_transitionClass:Class, p_force:Boolean = false):Boolean
+		public function doTransition(p_transitionClass:Class, p_force:Boolean = false):BBTransition
 		{
-			if (!interruptTransitions(p_force)) return false;
+			if (!interruptTransitions(p_force)) return _currentTransition;
 
 			//
 			var transition:BBTransition = getTransitionByClass(p_transitionClass);
@@ -173,10 +174,11 @@ package bb_fsm
 
 			if (_onTransitionReady) _onTransitionReady.dispatch(transition);
 
+			transition.dispatchOnBegin();
+
 			//
 			if (!transition.isDisposed)
 			{
-				transition.dispatchOnBegin();
 				transition.enter();
 			}
 			else
@@ -189,10 +191,10 @@ package bb_fsm
 					changeState(prevStateClass, true);
 				}
 
-				return false;
+				return _currentTransition;
 			}
 
-			return true;
+			return _currentTransition;
 		}
 
 		/**
@@ -202,8 +204,6 @@ package bb_fsm
 			switchStates(_currentTransition.stateTo, !_isStack);
 
 			_isTransitioning = false;
-			_currentTransition.dispatchOnComplete();
-			_currentTransition.dispose();
 			_currentTransition = null;
 		}
 

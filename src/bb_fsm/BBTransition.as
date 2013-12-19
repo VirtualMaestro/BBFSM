@@ -23,6 +23,8 @@ package bb_fsm
 		private var _stateFrom:BBState;
 		private var _stateTo:BBState;
 
+		private var _transitionComplete:Boolean = false;
+
 		/**
 		 */
 		public function BBTransition(p_stateFromClass:Class, p_stateToClass:Class)
@@ -49,10 +51,27 @@ package bb_fsm
 		}
 
 		/**
+		 * Invokes when transition start perform.
+		 * (children have to invoke super method)
+		 */
+		override public function enter():void
+		{
+			_transitionComplete = false;
+		}
+
+		/**
+		 * Invokes when transition finish perform.
+		 * (children have to invoke super method)
 		 */
 		override public function exit():void
 		{
 			i_onCompleteCallback();
+
+			_transitionComplete = true;
+
+			if (_onComplete) _onComplete.dispatch();
+
+			dispose();
 		}
 
 		/**
@@ -78,7 +97,11 @@ package bb_fsm
 		 */
 		internal function interrupt():void
 		{
+			if (isDisposed) return;
 			if (_stateTo) _stateTo.dispose();
+
+			_transitionComplete = true;
+
 			dispose();
 		}
 
@@ -109,20 +132,14 @@ package bb_fsm
 		}
 
 		/**
-		 * Dispatching onComplete signal (if it exist)
-		 */
-		internal function dispatchOnComplete():void
-		{
-			if (_onComplete) _onComplete.dispatch();
-		}
-
-		/**
 		 * Removes current instance, but it is possible to re-use it (it is stored in cache).
 		 */
 		override public function dispose():void
 		{
 			if (!isDisposed)
 			{
+				if (!_transitionComplete) interrupt();
+
 				i_onCompleteCallback = null;
 				i_stateFromClass = null;
 				i_stateToClass = null;

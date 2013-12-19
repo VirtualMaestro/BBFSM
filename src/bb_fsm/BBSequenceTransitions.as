@@ -15,10 +15,16 @@ package bb_fsm
 		private var _onComplete:BBSignal;
 
 		//
-		private var _stack:BBStack;
-		private var _current:BBTransitionItem;
+		private var _transitionsList:Vector.<BBTransitionItem>;
+		private var _numTransitions:int = 0;
+		private var _currentTransitionIndex:int = 0;
+		private var _currentItem:BBTransitionItem;
+		private var _currentTransition:BBTransition;
+
 		private var _timeBeforeTransitionBegin:int = 0;
 		private var _transitionComplete:Boolean = false;
+
+		internal var i_completeCallback:Function;
 
 		/**
 		 */
@@ -26,17 +32,29 @@ package bb_fsm
 		{
 			super();
 
-			_stack = new BBStack();
-			_onComplete = BBSignal.get(this, true);
+			_transitionsList = new <BBTransitionItem>[];
+		}
+
+		/**
+		 *
+		 */
+		protected function addTransitions(p_transitionList:Array, p_delayBeforeNext:int = 0):void
+		{
+			var len:int = p_transitionList.length;
+
+			for (var i:int = 0; i < len; i++)
+			{
+				addTransition(p_transitionList[i], p_delayBeforeNext);
+			}
 		}
 
 		/**
 		 * Adds transition to sequence.
 		 * p_delayBeforeNext - delaying milliseconds before start new transition.
 		 */
-		public function addTransition(p_transition:Class, p_delayBeforeNext:int = 0):void
+		protected function addTransition(p_transition:Class, p_delayBeforeNext:int = 0):void
 		{
-			_stack.push(new BBTransitionItem(p_transition, p_delayBeforeNext));
+			_transitionsList[_numTransitions++] = new BBTransitionItem(p_transition, p_delayBeforeNext);
 		}
 
 		/**
@@ -50,32 +68,31 @@ package bb_fsm
 		 */
 		private function setTransition(p_item:BBTransitionItem):void
 		{
-			_current = p_item;
-			_timeBeforeTransitionBegin = _current.delay;
+			_currentItem = p_item;
+			_timeBeforeTransitionBegin = _currentItem.delay;
 			_transitionComplete = false;
 
-			fsm.onTransitionCreated.add(transitionCreated, true);
-			fsm.doTransition(_current.transition);
-		}
+			_currentTransition = fsm.doTransition(_currentItem.transition);
 
-		/**
-		 */
-		private function transitionCreated(p_signal:BBSignal):void
-		{
-			(p_signal.params as BBTransition).onComplete.add(transitionComplete);
+			if (_currentTransition) _currentTransition.onComplete.add(transitionComplete);
+			else interrupt();
 		}
 
 		/**
 		 */
 		private function transitionComplete(p_signal:BBSignal):void
 		{
-			_current = next();
+			_currentTransition = null;
+			_currentItem = next();
 			_transitionComplete = true;
 
-			if (_current == null) // if it was last transition
+			if (_currentItem == null) // if it was last transition
 			{
-				_onComplete.dispatch();
 				exit();
+
+				i_completeCallback();
+				if (_onComplete) _onComplete.dispatch();
+
 				dispose();
 			}
 		}
@@ -83,23 +100,29 @@ package bb_fsm
 		/**
 		 * Skip all transitions and start doing last transition.
 		 */
-		public function skip():void
+		public function skipAll():void
 		{
-			var numTransitions:int = _stack.size;
-			for (var i:int = numTransitions - 1; i > 1; i--)
-			{
-				next().dispose();
-			}
+			_currentTransitionIndex = _numTransitions - 1;
+			if (_currentTransition) _currentTransition.exit();
+		}
 
-			setTransition(next());
+		/**
+		 * Starts do transition from given number.
+		 * If you have 5 transitions the last transition index is 4.
+		 */
+		protected function setTransitionByIndex(p_transitionIndex:uint):void
+		{
+			_currentTransitionIndex = p_transitionIndex < _numTransitions ? p_transitionIndex : _numTransitions - 1;
+			if (_currentTransition) _currentTransition.exit();
 		}
 
 		/**
 		 * Returns next transition in stack.
 		 */
-		private function next():BBTransitionItem
+		[Inline]
+		final private function next():BBTransitionItem
 		{
-			return _stack.pop() as BBTransitionItem;
+			return _currentTransitionIndex < _numTransitions ? _transitionsList[_currentTransitionIndex++] : null;
 		}
 
 		/**
@@ -111,7 +134,7 @@ package bb_fsm
 				_timeBeforeTransitionBegin -= p_deltaTime;
 				if (_timeBeforeTransitionBegin <= 0)
 				{
-					setTransition(_current);
+					setTransition(_currentItem);
 				}
 			}
 		}
@@ -120,7 +143,10 @@ package bb_fsm
 		 */
 		public function interrupt():void
 		{
-			_onComplete.dispatch();
+			if (_currentTransition) _currentTransition.interrupt();
+			i_completeCallback();
+			_transitionComplete = true;
+
 			dispose();
 		}
 
@@ -129,21 +155,8 @@ package bb_fsm
 		 */
 		public function get onComplete():BBSignal
 		{
+			if (_onComplete == null) _onComplete = BBSignal.get(this, true);
 			return _onComplete;
-		}
-
-		/**
-		 */
-		private function clear():void
-		{
-			var numTransitions:int = _stack.size;
-			if (numTransitions > 0)
-			{
-				for (var i:int = numTransitions - 1; i >= 0; i--)
-				{
-					next().dispose();
-				}
-			}
 		}
 
 		/**
@@ -152,19 +165,43 @@ package bb_fsm
 		{
 			if (!isDisposed)
 			{
-				clear();
-				_current = null;
+				if (!_transitionComplete) interrupt();
+
+				_currentTransitionIndex = 0;
+				_currentItem = null;
 				_timeBeforeTransitionBegin = 0;
 				_transitionComplete = false;
+				_currentTransition = null;
+				i_completeCallback = null;
 
 				super.dispose();
 			}
 		}
 
 		/**
+		 * Dispose and clear all transition items in transition list and remove list at all.
+		 */
+		private function clear():void
+		{
+			var numTransitions:int = _transitionsList.length;
+			for (var i:int = 0; i < numTransitions; i++)
+			{
+				_transitionsList[i].dispose();
+				_transitionsList[i] = null;
+			}
+
+			_transitionsList.length = 0;
+			_transitionsList = null;
+		}
+
+		/**
 		 */
 		override public function rid():void
 		{
+			super.rid();
+
+			clear();
+
 			if (_onComplete) _onComplete.dispose();
 			_onComplete = null;
 		}
